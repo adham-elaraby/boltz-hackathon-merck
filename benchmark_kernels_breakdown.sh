@@ -86,7 +86,9 @@ run_warmup() {
     rm -rf warmup_temp
     
     echo "    Warmup complete"
-}# Function to run benchmark iteration
+}
+
+# Function to run benchmark iteration
 run_benchmark_iteration() {
     local config_name=$1
     local iteration=$2
