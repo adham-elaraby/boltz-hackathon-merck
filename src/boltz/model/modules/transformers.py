@@ -157,6 +157,7 @@ class DiffusionTransformer(Module):
         to_keys=None,
         multiplicity=1,
         model_cache=None,
+        use_kernels=False,
     ):
         for i, layer in enumerate(self.layers):
             layer_cache = None
@@ -173,6 +174,7 @@ class DiffusionTransformer(Module):
                 to_keys=to_keys,
                 multiplicity=multiplicity,
                 layer_cache=layer_cache,
+                use_kernels=use_kernels,
             )
         return a
 
@@ -231,6 +233,7 @@ class DiffusionTransformerLayer(Module):
         to_keys=None,
         multiplicity=1,
         layer_cache=None,
+        use_kernels=False,
     ):
         b = self.adaln(a, s)
         b = self.pair_bias_attn(
@@ -240,6 +243,7 @@ class DiffusionTransformerLayer(Module):
             multiplicity=multiplicity,
             to_keys=to_keys,
             model_cache=layer_cache,
+            use_kernels=use_kernels,
         )
         b = self.output_projection(s) * b
 

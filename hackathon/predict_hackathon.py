@@ -241,9 +241,14 @@ def _run_boltz_and_collect(datapoint) -> None:
             "--devices", "1",
             "--out_dir", str(out_dir),
             "--cache", cache,
-            "--no_kernels",
+            # Kernels enabled for NVIDIA cuEquivariance optimizations
             "--output_format", "pdb",
         ]
+        
+        # Add recycling steps if specified
+        if args.recycling_steps is not None:
+            fixed.extend(["--recycling_steps", str(args.recycling_steps)])
+        
         cmd = fixed + cli_args
         print(f"Running config {config_idx}:", " ".join(cmd), flush=True)
         subprocess.run(cmd, check=True)

@@ -647,7 +647,7 @@ class PairformerLayer(nn.Module):
 
         # Compute sequence stack
         if not self.no_update_s:
-            s = s + self.attention(s, z, mask)
+            s = s + self.attention(s, z, mask, use_kernels=use_kernels)
             s = s + self.transition_s(s)
 
         return s, z

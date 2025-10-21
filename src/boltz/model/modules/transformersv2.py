@@ -102,6 +102,7 @@ class DiffusionTransformer(Module):
         mask=None,  # Bool['b n'] | None = None
         to_keys=None,
         multiplicity=1,
+        use_kernels=False,
     ):
         if self.pair_bias_attn:
             B, N, M, D = bias.shape
@@ -123,6 +124,7 @@ class DiffusionTransformer(Module):
                     mask,
                     to_keys,
                     multiplicity,
+                    use_kernels,
                 )
 
             else:
@@ -133,6 +135,7 @@ class DiffusionTransformer(Module):
                     mask,  # Bool['b n'] | None = None
                     to_keys,
                     multiplicity,
+                    use_kernels,
                 )
         return a
 
@@ -180,6 +183,7 @@ class DiffusionTransformerLayer(Module):
         mask=None,  # Bool['b n'] | None = None
         to_keys=None,
         multiplicity=1,
+        use_kernels=False,
     ):
         b = self.adaln(a, s)
 
@@ -195,6 +199,7 @@ class DiffusionTransformerLayer(Module):
                 mask=mask,
                 multiplicity=multiplicity,
                 k_in=k_in,
+                use_kernels=use_kernels,
             )
         else:
             b = self.no_pair_bias_attn(s=b, mask=mask, k_in=k_in)

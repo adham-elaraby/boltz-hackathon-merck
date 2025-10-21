@@ -105,7 +105,7 @@ class PairformerLayer(nn.Module):
         with torch.autocast("cuda", enabled=False):
             s_normed = self.pre_norm_s(s.float())
             s = s.float() + self.attention(
-                s=s_normed, z=z.float(), mask=mask.float(), k_in=s_normed
+                s=s_normed, z=z.float(), mask=mask.float(), k_in=s_normed, use_kernels=use_kernels
             )
             s = s + self.transition_s(s)
             s = self.s_post_norm(s)
