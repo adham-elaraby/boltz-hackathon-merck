@@ -120,11 +120,12 @@ def extract_timing_from_logs(log_file: Path) -> Dict[str, float]:
 
 
 def run_benchmark(mode: str, input_jsonl: Path, msa_dir: Path, output_dir: Path, 
-                  num_samples: int = 5, result_folder: Path = None):
+                  num_samples: int = 5, result_folder: Path = None, recycling_steps: int = 6):
     """Run benchmark predictions."""
     
     print("=" * 80)
     print(f"Running benchmark: {mode.upper()} mode")
+    print(f"   Recycling steps: {recycling_steps}")
     print("=" * 80)
     
     # Setup
@@ -170,7 +171,8 @@ def run_benchmark(mode: str, input_jsonl: Path, msa_dir: Path, output_dir: Path,
         "--msa-dir", str(msa_dir),
         "--submission-dir", str(submission_dir),
         "--intermediate-dir", str(intermediate_dir),
-        "--result-folder", str(result_folder)
+        "--result-folder", str(result_folder),
+        "--recycling-steps", str(recycling_steps)
     ]
     
     print("Running command:")
@@ -367,6 +369,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, help="Output directory")
     parser.add_argument("--num-samples", type=int, default=5, help="Number of samples to test (default: 5)")
     parser.add_argument("--result-folder", type=Path, help="Result folder for evaluation")
+    parser.add_argument("--recycling-steps", type=int, default=6, 
+                        help="Number of recycling steps to use (default: 6, Boltz default is 3)")
     
     # For compare mode
     parser.add_argument("--baseline-dir", type=Path, help="Baseline results directory")
@@ -384,7 +388,8 @@ def main():
             msa_dir=args.msa_dir,
             output_dir=args.output_dir,
             num_samples=args.num_samples,
-            result_folder=args.result_folder
+            result_folder=args.result_folder,
+            recycling_steps=args.recycling_steps
         )
     
     elif args.mode == "compare":

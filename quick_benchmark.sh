@@ -14,6 +14,7 @@ NUM_SAMPLES=5
 DATASET="abag_public"  # or asos_public
 INPUT_JSONL="hackathon_data/datasets/${DATASET}/${DATASET}.jsonl"
 MSA_DIR="hackathon_data/datasets/${DATASET}/msa/"
+RECYCLING_STEPS=6  # Testing with 6 recycling steps (vs Boltz default of 3)
 
 # Check if files exist
 if [ ! -f "$INPUT_JSONL" ]; then
@@ -43,7 +44,8 @@ python benchmark_adaptive_recycling.py \
     --input-jsonl "$INPUT_JSONL" \
     --msa-dir "$MSA_DIR" \
     --output-dir ./benchmark_baseline \
-    --num-samples $NUM_SAMPLES
+    --num-samples $NUM_SAMPLES \
+    --recycling-steps $RECYCLING_STEPS
 
 if [ $? -ne 0 ]; then
     echo "❌ Baseline benchmark failed!"
@@ -65,7 +67,8 @@ python benchmark_adaptive_recycling.py \
     --input-jsonl "$INPUT_JSONL" \
     --msa-dir "$MSA_DIR" \
     --output-dir ./benchmark_optimized \
-    --num-samples $NUM_SAMPLES
+    --num-samples $NUM_SAMPLES \
+    --recycling-steps $RECYCLING_STEPS
 
 if [ $? -ne 0 ]; then
     echo "❌ Optimized benchmark failed!"

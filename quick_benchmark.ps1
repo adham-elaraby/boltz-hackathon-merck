@@ -12,11 +12,13 @@ Write-Host ""
 $DATASET = "abag_public"  # or asos_public
 $INPUT_JSONL = "hackathon_data/datasets/$DATASET/$DATASET.jsonl"
 $MSA_DIR = "hackathon_data/datasets/$DATASET/msa/"
+$RECYCLING_STEPS = 6  # Testing with 6 recycling steps (vs Boltz default of 3)
 
 # Calculate 25% of the dataset (with minimum of 2 samples)
 $TOTAL_SAMPLES = (Get-Content $INPUT_JSONL | Measure-Object -Line).Lines
 $NUM_SAMPLES = [Math]::Max(2, [Math]::Round($TOTAL_SAMPLES * 0.25))
 Write-Host "📊 Dataset has $TOTAL_SAMPLES samples, using $NUM_SAMPLES (25%)" -ForegroundColor Green
+Write-Host "🔄 Using $RECYCLING_STEPS recycling steps (Boltz default: 3)" -ForegroundColor Green
 Write-Host ""
 
 # Check if files exist
@@ -47,7 +49,8 @@ python benchmark_adaptive_recycling.py `
     --input-jsonl "$INPUT_JSONL" `
     --msa-dir "$MSA_DIR" `
     --output-dir ./benchmark_baseline `
-    --num-samples $NUM_SAMPLES
+    --num-samples $NUM_SAMPLES `
+    --recycling-steps $RECYCLING_STEPS
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Baseline benchmark failed!" -ForegroundColor Red
@@ -69,7 +72,8 @@ python benchmark_adaptive_recycling.py `
     --input-jsonl "$INPUT_JSONL" `
     --msa-dir "$MSA_DIR" `
     --output-dir ./benchmark_optimized `
-    --num-samples $NUM_SAMPLES
+    --num-samples $NUM_SAMPLES `
+    --recycling-steps $RECYCLING_STEPS
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Optimized benchmark failed!" -ForegroundColor Red

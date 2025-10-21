@@ -155,6 +155,8 @@ ap.add_argument("--group-id", type=str, required=False, default=None,
                 help="Group ID to set for submission directory (sets group rw access if specified)")
 ap.add_argument("--result-folder", type=Path, required=False, default=None,
                 help="Directory to save evaluation results. If set, will automatically run evaluation after predictions.")
+ap.add_argument("--recycling-steps", type=int, required=False, default=None,
+                help="Number of recycling steps to use for prediction. If not specified, uses Boltz default (3).")
 
 args = ap.parse_args()
 
@@ -244,6 +246,11 @@ def _run_boltz_and_collect(datapoint) -> None:
             "--no_kernels",
             "--output_format", "pdb",
         ]
+        
+        # Add recycling steps if specified
+        if args.recycling_steps is not None:
+            fixed.extend(["--recycling_steps", str(args.recycling_steps)])
+        
         cmd = fixed + cli_args
         print(f"Running config {config_idx}:", " ".join(cmd), flush=True)
         subprocess.run(cmd, check=True)
