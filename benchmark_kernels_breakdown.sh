@@ -117,7 +117,7 @@ run_benchmark_iteration() {
         --input-jsonl "../benchmark_temp_breakdown/single_sample.jsonl" \
         --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
         --intermediate-dir "../${output_dir}" \
-        --submission-dir "../${output_dir}/submission" > "../${output_dir}/log.txt" 2>&1
+        --submission-dir "../${output_dir}/submission" 2>&1 | tee "../${output_dir}/log.txt"
 
     END_TIME=$(date +%s.%N)
     ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
