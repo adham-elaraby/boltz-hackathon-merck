@@ -59,30 +59,34 @@ echo ""
 run_warmup() {
     local config_name=$1
     local kernel_flags=$2
-
+    
     echo -e "${YELLOW}  Warming up GPU for ${config_name}...${NC}"
-
+    
     cd hackathon
     cp predict_hackathon.py predict_hackathon_warmup.py
-
+    
     # Inject flags
-    sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
+    if [ -z "$kernel_flags" ]; then
+        # No kernel flags - just add sampling_steps and override
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
+    else
+        # With kernel flags (e.g., --no_kernels)
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
+    fi
     sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_warmup.py
-
+    
     timeout 300 python predict_hackathon_warmup.py \
         --input-jsonl "../benchmark_temp_breakdown/single_sample.jsonl" \
         --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
         --intermediate-dir ../warmup_temp \
         --submission-dir ../warmup_temp/submission > /dev/null 2>&1 || true
-
+    
     rm predict_hackathon_warmup.py
     cd ..
     rm -rf warmup_temp
-
+    
     echo "    Warmup complete"
-}
-
-# Function to run benchmark iteration
+}# Function to run benchmark iteration
 run_benchmark_iteration() {
     local config_name=$1
     local iteration=$2
@@ -95,7 +99,13 @@ run_benchmark_iteration() {
     cp predict_hackathon.py predict_hackathon_iter${iteration}.py
 
     # Inject flags
-    sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
+    if [ -z "$kernel_flags" ]; then
+        # No kernel flags - just add sampling_steps and override
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
+    else
+        # With kernel flags (e.g., --no_kernels)
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
+    fi
     sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_iter${iteration}.py
 
     mkdir -p "../${output_dir}"
@@ -155,11 +165,11 @@ else
     exit 1
 fi
 
-run_warmup "triangle_only" '""'
+run_warmup "triangle_only" ""
 echo ""
 
 for i in $(seq 1 ${NUM_ITERATIONS}); do
-    run_benchmark_iteration "triangle_only" ${i} '""'
+    run_benchmark_iteration "triangle_only" ${i} ""
     
     # Check if iteration succeeded
     if [ ! -f "${RESULTS_DIR}/triangle_only_iter${i}/time.txt" ]; then
@@ -179,11 +189,11 @@ echo ""
 
 # CONFIG 3: FULL OPTIMIZED (all kernels)
 echo -e "${CYAN}[4/4] Running FULL OPTIMIZED (all kernels)...${NC}"
-run_warmup "full_optimized" '""'
+run_warmup "full_optimized" ""
 echo ""
 
 for i in $(seq 1 ${NUM_ITERATIONS}); do
-    run_benchmark_iteration "full_optimized" ${i} '""'
+    run_benchmark_iteration "full_optimized" ${i} ""
     full_times+=($(cat "${RESULTS_DIR}/full_optimized_iter${i}/time.txt"))
 done
 echo ""
