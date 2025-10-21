@@ -7,7 +7,7 @@ set -e
 # Default configuration
 NUM_SAMPLES=1
 DATASET="abag_public"
-NUM_DIFFUSION_STEPS=50  # Use 200 for full production settings
+SAMPLING_STEPS=50  # Use 200 for full production settings
 RECYCLING_STEPS=3
 NUM_RUNS=1  # Run each test multiple times for averaging
 
@@ -23,8 +23,8 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --full)
-            NUM_DIFFUSION_STEPS=200
-            echo "Using full production settings (200 diffusion steps)"
+            SAMPLING_STEPS=200
+            echo "Using full production settings (200 sampling steps)"
             shift
             ;;
         --runs)
@@ -62,7 +62,7 @@ echo ""
 echo "Configuration:"
 echo "  Dataset:          $DATASET"
 echo "  Samples:          $NUM_SAMPLES"
-echo "  Diffusion steps:  $NUM_DIFFUSION_STEPS"
+echo "  Sampling steps:   $SAMPLING_STEPS"
 echo "  Recycling steps:  $RECYCLING_STEPS"
 echo "  Runs per config:  $NUM_RUNS"
 echo ""
@@ -123,7 +123,7 @@ for sample_id in "${SAMPLE_IDS[@]}"; do
             "hackathon_data/datasets/${DATASET}/${sample_id}" \
             --out_dir "$OUTPUT_DIR_BASELINE/${sample_id}" \
             --recycling_steps $RECYCLING_STEPS \
-            --num_diffn_timesteps $NUM_DIFFUSION_STEPS \
+            --sampling_steps $SAMPLING_STEPS \
             --step_scale 2.0 \
             --override \
             --no_kernels > /dev/null 2>&1
@@ -175,7 +175,7 @@ for sample_id in "${SAMPLE_IDS[@]}"; do
             "hackathon_data/datasets/${DATASET}/${sample_id}" \
             --out_dir "$OUTPUT_DIR_OPTIMIZED/${sample_id}" \
             --recycling_steps $RECYCLING_STEPS \
-            --num_diffn_timesteps $NUM_DIFFUSION_STEPS \
+            --sampling_steps $SAMPLING_STEPS \
             --step_scale 2.0 \
             --override > /dev/null 2>&1
         
@@ -260,7 +260,7 @@ cat > "$RESULTS_FILE" <<EOF
   "configuration": {
     "dataset": "$DATASET",
     "num_samples": $NUM_SAMPLES,
-    "diffusion_steps": $NUM_DIFFUSION_STEPS,
+    "sampling_steps": $SAMPLING_STEPS,
     "recycling_steps": $RECYCLING_STEPS,
     "num_runs": $NUM_RUNS
   },

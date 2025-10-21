@@ -54,7 +54,7 @@ python -m boltz.main predict \
     "hackathon_data/datasets/${DATASET}/${SAMPLE_ID}" \
     --out_dir "$OUTPUT_DIR_BASELINE" \
     --recycling_steps 3 \
-    --num_diffn_timesteps 50 \
+    --sampling_steps 50 \
     --step_scale 2.0 \
     --no_kernels
 
@@ -86,7 +86,7 @@ python -m boltz.main predict \
     "hackathon_data/datasets/${DATASET}/${SAMPLE_ID}" \
     --out_dir "$OUTPUT_DIR_OPTIMIZED" \
     --recycling_steps 3 \
-    --num_diffn_timesteps 50 \
+    --sampling_steps 50 \
     --step_scale 2.0
 
 if [ $? -ne 0 ]; then
