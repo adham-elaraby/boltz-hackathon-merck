@@ -86,7 +86,7 @@ echo "Reading sample IDs from $INPUT_JSONL..."
 SAMPLE_IDS=()
 count=0
 while IFS= read -r line && [ $count -lt $NUM_SAMPLES ]; do
-    sample_id=$(echo "$line" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+    sample_id=$(echo "$line" | python3 -c "import sys, json; print(json.load(sys.stdin)['datapoint_id'])")
     SAMPLE_IDS+=("$sample_id")
     ((count++))
 done < "$INPUT_JSONL"

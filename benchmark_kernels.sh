@@ -32,8 +32,8 @@ echo "✅ Input: $INPUT_JSONL"
 echo "✅ MSA: $MSA_DIR"
 echo ""
 
-# Get first sample ID
-SAMPLE_ID=$(head -n 1 "$INPUT_JSONL" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+# Get first sample ID (datapoint_id from JSONL)
+SAMPLE_ID=$(head -n 1 "$INPUT_JSONL" | python3 -c "import sys, json; print(json.load(sys.stdin)['datapoint_id'])")
 
 echo "Testing with sample: $SAMPLE_ID"
 echo ""
