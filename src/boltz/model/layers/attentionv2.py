@@ -66,6 +66,7 @@ class AttentionPairBias(nn.Module):
         mask: Tensor,
         k_in: Tensor,
         multiplicity: int = 1,
+        use_kernels: bool = False,
     ) -> Tensor:
         """Forward pass.
 
@@ -77,6 +78,8 @@ class AttentionPairBias(nn.Module):
             The input pairwise tensor or bias (B, N, N, D)
         mask : torch.Tensor
             The pairwise mask tensor (B, N, N)
+        use_kernels : bool, optional
+            Whether to use NVIDIA cuEquivariance optimized kernels, by default False
 
         Returns
         -------
@@ -84,6 +87,10 @@ class AttentionPairBias(nn.Module):
             The output sequence tensor.
 
         """
+        # Note: v2 version doesn't implement kernel optimization yet
+        # It always uses standard PyTorch path
+        # The use_kernels parameter is accepted for API compatibility
+        
         B = s.shape[0]
 
         # Compute projections
