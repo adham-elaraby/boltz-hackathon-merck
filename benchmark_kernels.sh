@@ -33,10 +33,10 @@ cd hackathon
 start_time=$(date +%s)
 
 python predict_hackathon.py \
-    --dataset "$DATASET" \
+    --input-jsonl "../hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" \
+    --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
     --intermediate-dir ../benchmark_baseline \
     --submission-dir ../benchmark_baseline/submission \
-    --num-samples 1 \
     -- --no_kernels --sampling_steps 50 --override
 
 if [ $? -ne 0 ]; then
@@ -66,10 +66,10 @@ cd hackathon
 start_time=$(date +%s)
 
 python predict_hackathon.py \
-    --dataset "$DATASET" \
+    --input-jsonl "../hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" \
+    --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
     --intermediate-dir ../benchmark_optimized \
     --submission-dir ../benchmark_optimized/submission \
-    --num-samples 1 \
     -- --sampling_steps 50 --override
 
 if [ $? -ne 0 ]; then
