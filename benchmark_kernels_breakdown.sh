@@ -2,7 +2,7 @@
 
 ################################################################################
 # Kernel Breakdown Benchmark - Isolate Contribution of Each Optimization
-# 
+#
 # Tests 3 configurations:
 # 1. BASELINE: --no_kernels (no optimizations)
 # 2. TRIANGLE ONLY: Triangle kernels enabled, AttentionPairBias disabled
@@ -59,26 +59,26 @@ echo ""
 run_warmup() {
     local config_name=$1
     local kernel_flags=$2
-    
+
     echo -e "${YELLOW}  Warming up GPU for ${config_name}...${NC}"
-    
+
     cd hackathon
     cp predict_hackathon.py predict_hackathon_warmup.py
-    
+
     # Inject flags
     sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
     sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_warmup.py
-    
+
     timeout 300 python predict_hackathon_warmup.py \
         --input-jsonl "../benchmark_temp_breakdown/single_sample.jsonl" \
         --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
         --intermediate-dir ../warmup_temp \
         --submission-dir ../warmup_temp/submission > /dev/null 2>&1 || true
-    
+
     rm predict_hackathon_warmup.py
     cd ..
     rm -rf warmup_temp
-    
+
     echo "    Warmup complete"
 }
 
@@ -88,31 +88,31 @@ run_benchmark_iteration() {
     local iteration=$2
     local kernel_flags=$3
     local output_dir="${RESULTS_DIR}/${config_name}_iter${iteration}"
-    
+
     echo -e "${GREEN}  Running ${config_name} - Iteration ${iteration}/${NUM_ITERATIONS}...${NC}"
-    
+
     cd hackathon
     cp predict_hackathon.py predict_hackathon_iter${iteration}.py
-    
+
     # Inject flags
     sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", '"${kernel_flags}"', "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
     sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_iter${iteration}.py
-    
+
     mkdir -p "../${output_dir}"
     START_TIME=$(date +%s.%N)
-    
+
     python predict_hackathon_iter${iteration}.py \
         --input-jsonl "../benchmark_temp_breakdown/single_sample.jsonl" \
         --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
         --intermediate-dir "../${output_dir}" \
         --submission-dir "../${output_dir}/submission" > "../${output_dir}/log.txt" 2>&1
-    
+
     END_TIME=$(date +%s.%N)
     ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
-    
+
     echo "${ELAPSED}" > "../${output_dir}/time.txt"
     echo "    Time: ${ELAPSED}s"
-    
+
     rm predict_hackathon_iter${iteration}.py
     cd ..
 }
@@ -142,39 +142,39 @@ echo "  Temporarily patching code to disable attention kernel..."
 ATTENTION_FILE="src/boltz/model/layers/attention.py"
 cp "${ATTENTION_FILE}" "${ATTENTION_FILE}.backup"
 
-# Replace the forward call to force use_kernels=False
-# Find the line where use_kernels is passed and change it to False
-python3 << 'PYTHON_PATCH'
-import re
+# Use sed to replace "if use_kernels:" with "if False:" in the forward method
+# This is more robust than Python regex
+sed -i 's/if use_kernels:/if False:  # BENCHMARK: Force disable attention kernel/' "${ATTENTION_FILE}"
 
-with open('src/boltz/model/layers/attention.py', 'r') as f:
-    content = f.read()
-
-# Force use_kernels to always be False in the forward method
-# Find: "if use_kernels:" and replace with "if False:  # BENCHMARK: Force disable attention kernel"
-content = re.sub(
-    r'(\s+)if use_kernels:',
-    r'\1if False:  # BENCHMARK: Force disable attention kernel',
-    content
-)
-
-with open('src/boltz/model/layers/attention.py', 'w') as f:
-    f.write(content)
-
-print("  Attention kernel disabled")
-PYTHON_PATCH
+# Check if patch succeeded
+if grep -q "BENCHMARK: Force disable attention kernel" "${ATTENTION_FILE}"; then
+    echo "  ✓ Attention kernel disabled successfully"
+else
+    echo "  ✗ Failed to patch attention.py"
+    mv "${ATTENTION_FILE}.backup" "${ATTENTION_FILE}"
+    exit 1
+fi
 
 run_warmup "triangle_only" '""'
 echo ""
 
 for i in $(seq 1 ${NUM_ITERATIONS}); do
     run_benchmark_iteration "triangle_only" ${i} '""'
+    
+    # Check if iteration succeeded
+    if [ ! -f "${RESULTS_DIR}/triangle_only_iter${i}/time.txt" ]; then
+        echo "  ✗ Iteration ${i} failed! Check log: ${RESULTS_DIR}/triangle_only_iter${i}/log.txt"
+        # Restore and exit
+        mv "${ATTENTION_FILE}.backup" "${ATTENTION_FILE}"
+        exit 1
+    fi
+    
     triangle_times+=($(cat "${RESULTS_DIR}/triangle_only_iter${i}/time.txt"))
 done
 
 # Restore original file
 mv "${ATTENTION_FILE}.backup" "${ATTENTION_FILE}"
-echo "  Code restored"
+echo "  ✓ Code restored"
 echo ""
 
 # CONFIG 3: FULL OPTIMIZED (all kernels)
