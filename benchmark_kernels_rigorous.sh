@@ -50,8 +50,8 @@ SAMPLE_ID=$(python3 -c "import json; print(json.load(open('single_sample.jsonl')
 echo "  Using sample: ${SAMPLE_ID}"
 echo ""
 
-# Create temporary modified script
-TEMP_SCRIPT="predict_hackathon_temp_${TIMESTAMP}.py"
+# Create temporary modified script in hackathon directory
+TEMP_SCRIPT="hackathon/predict_hackathon_temp_${TIMESTAMP}.py"
 echo -e "${BLUE}[2/6] Creating temporary prediction script...${NC}"
 
 # Copy original and remove recycling_steps check
@@ -80,12 +80,13 @@ run_warmup() {
         fi
         
         # Run warmup (suppress output)
-        timeout 300 python3 "${TEMP_SCRIPT}.warmup" \
-            --input-jsonl single_sample.jsonl \
-            --output predictions_warmup \
-            --msa_directory "hackathon_data/datasets/${DATASET}/msa" \
+        cd hackathon && timeout 300 python3 "../${TEMP_SCRIPT}.warmup" \
+            --input-jsonl ../single_sample.jsonl \
+            --output ../predictions_warmup \
+            --msa_directory "../hackathon_data/datasets/${DATASET}/msa" \
             --sampling_steps ${SAMPLING_STEPS} \
             --override > /dev/null 2>&1 || true
+        cd ..
         
         echo "done"
         rm -f "${TEMP_SCRIPT}.warmup"
@@ -114,12 +115,13 @@ run_benchmark_iteration() {
     mkdir -p "${output_dir}"
     START_TIME=$(date +%s.%N)
     
-    python3 "${TEMP_SCRIPT}.run${iteration}" \
-        --input-jsonl single_sample.jsonl \
-        --output "${output_dir}" \
-        --msa_directory "hackathon_data/datasets/${DATASET}/msa" \
+    cd hackathon && python3 "../${TEMP_SCRIPT}.run${iteration}" \
+        --input-jsonl ../single_sample.jsonl \
+        --output "../${output_dir}" \
+        --msa_directory "../hackathon_data/datasets/${DATASET}/msa" \
         --sampling_steps ${SAMPLING_STEPS} \
-        --override 2>&1 | tee "${output_dir}/log.txt"
+        --override 2>&1 | tee "../${output_dir}/log.txt"
+    cd ..
     
     END_TIME=$(date +%s.%N)
     ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
