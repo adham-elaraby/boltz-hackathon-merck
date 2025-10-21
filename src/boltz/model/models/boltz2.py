@@ -1,4 +1,5 @@
 import gc
+import time
 from typing import Any, Optional
 
 import numpy as np
@@ -104,12 +105,18 @@ class Boltz2(LightningModule):
         checkpoint_diffusion_conditioning: bool = False,
         use_templates_v2: bool = False,
         use_kernels: bool = False,
+        adaptive_recycling: bool = False,
+        adaptive_recycling_threshold: float = 0.01,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["validators"])
 
         # No random recycling
         self.no_random_recycling_training = no_random_recycling_training
+        
+        # Adaptive recycling parameters
+        self.adaptive_recycling = adaptive_recycling
+        self.adaptive_recycling_threshold = adaptive_recycling_threshold
 
         if validate_structure:
             # Late init at setup time
@@ -408,6 +415,9 @@ class Boltz2(LightningModule):
         max_parallel_samples: Optional[int] = None,
         run_confidence_sequentially: bool = False,
     ) -> dict[str, Tensor]:
+        # Timing: Start overall forward pass
+        forward_start_time = time.time()
+        
         with torch.set_grad_enabled(
             self.training and self.structure_prediction_training
         ):
@@ -435,6 +445,12 @@ class Boltz2(LightningModule):
             # Compute pairwise mask
             mask = feats["token_pad_mask"].float()
             pair_mask = mask[:, :, None] * mask[:, None, :]
+            
+            # Timing: Start recycling loop
+            recycling_start_time = time.time()
+            prev_distogram = None
+            converged_at_step = -1
+            
             if self.run_trunk_and_structure:
                 for i in range(recycling_steps + 1):
                     with torch.set_grad_enabled(
@@ -487,6 +503,26 @@ class Boltz2(LightningModule):
                             pair_mask=pair_mask,
                             use_kernels=self.use_kernels,
                         )
+                        
+                        # Adaptive recycling: check convergence
+                        if self.adaptive_recycling and not self.training and i > 0:
+                            curr_distogram = self.distogram_module(z)
+                            if prev_distogram is not None:
+                                # Compute MSE between current and previous distogram
+                                diff = torch.nn.functional.mse_loss(
+                                    curr_distogram, prev_distogram
+                                )
+                                if diff < self.adaptive_recycling_threshold:
+                                    converged_at_step = i
+                                    print(f"[Adaptive Recycling] Converged at step {i}/{recycling_steps} with MSE={diff:.6f}")
+                                    break
+                            prev_distogram = curr_distogram.detach()
+            
+            # Timing: End recycling loop
+            recycling_time = time.time() - recycling_start_time
+            if not self.training:
+                actual_steps = converged_at_step if converged_at_step > 0 else recycling_steps + 1
+                print(f"[Timing] Recycling completed in {recycling_time:.2f}s ({actual_steps}/{recycling_steps + 1} steps)")
 
             pdistogram = self.distogram_module(z)
             dict_out = {
@@ -718,6 +754,11 @@ class Boltz2(LightningModule):
                             ),
                         }
                     )
+        
+        # Timing: End overall forward pass
+        forward_time = time.time() - forward_start_time
+        if not self.training:
+            print(f"[Timing] Total forward pass completed in {forward_time:.2f}s")
 
         return dict_out
 
