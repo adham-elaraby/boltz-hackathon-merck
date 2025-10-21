@@ -38,7 +38,10 @@ echo ""
 # Temporarily modify predict_hackathon.py to add --no_kernels
 cd hackathon
 cp predict_hackathon.py predict_hackathon_baseline.py
-sed -i 's/"boltz", "predict", str(yaml_path)/"boltz", "predict", str(yaml_path), "--no_kernels", "--sampling_steps", "50"/' predict_hackathon_baseline.py
+# Replace the boltz command line to add flags
+sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--no_kernels", "--sampling_steps", "50", "--override",/' predict_hackathon_baseline.py
+# Remove the recycling_steps check since we're not using it
+sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_baseline.py
 
 start_time=$(date +%s)
 
@@ -74,7 +77,10 @@ echo ""
 # Temporarily modify predict_hackathon.py to add --sampling_steps
 cd hackathon
 cp predict_hackathon.py predict_hackathon_optimized.py
-sed -i 's/"boltz", "predict", str(yaml_path)/"boltz", "predict", str(yaml_path), "--sampling_steps", "50"/' predict_hackathon_optimized.py
+# Replace the boltz command line to add flags (no --no_kernels for optimized!)
+sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--sampling_steps", "50", "--override",/' predict_hackathon_optimized.py
+# Remove the recycling_steps check since we're not using it
+sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_optimized.py
 
 start_time=$(date +%s)
 
