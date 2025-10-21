@@ -25,11 +25,11 @@ def kernel_attention_pair_bias(
     eps=1e-5,
 ):
     """Wrapper for NVIDIA cuEquivariance attention_pair_bias kernel.
-    
+
     Uses optimized Triton kernels for long sequences and PyTorch fallback for short sequences.
     """
     from cuequivariance_torch import attention_pair_bias
-    
+
     # Call NVIDIA's optimized kernel
     # Note: cuEquivariance kernel returns (output, proj_z)
     output, _ = attention_pair_bias(
@@ -54,7 +54,7 @@ def kernel_attention_pair_bias(
         return_z_proj=False,  # We don't need the projected z for now
         is_cached_z_proj=False,  # z is not pre-projected
     )
-    
+
     return output
 
 
@@ -162,15 +162,16 @@ class AttentionPairBias(nn.Module):
 
         # Handle z projection and caching
         z_is_cached = model_cache is not None and "z" in model_cache
-        
+
         if use_kernels:
+            print("Using NVIDIA cuEquivariance optimized kernel for AttentionPairBias")
             # NVIDIA cuEquivariance kernel path
             # The kernel expects z in (B, U, V, z_dim) format and handles projection internally
-            
+
             # Get z projection layer components
             z_ln = self.proj_z[0]  # LayerNorm
             z_linear = self.proj_z[1]  # Linear projection
-            
+
             # Prepare z: if cached, it's already projected; otherwise use raw z
             if z_is_cached:
                 z_input = model_cache["z"]
@@ -180,15 +181,15 @@ class AttentionPairBias(nn.Module):
                 # Not projected yet: (B, U, V, z_dim)
                 z_input = z
                 is_cached_proj = False
-                
+
             # Repeat for multiplicity (diffusion steps)
             z_input = z_input.repeat_interleave(multiplicity, 0)
-            
+
             # Transpose q, k, v to match kernel expectations: (B*M, H, S, DH)
             q_kernel = q.transpose(1, 2).contiguous()
             k_kernel = k.transpose(1, 2).contiguous()
             v_kernel = v.transpose(1, 2).contiguous()
-            
+
             # Call NVIDIA optimized kernel
             o = kernel_attention_pair_bias(
                 s=s,
@@ -208,15 +209,15 @@ class AttentionPairBias(nn.Module):
                 inf=self.inf,
                 eps=1e-5,
             )
-            
+
             # Cache z projection if needed
             if not z_is_cached and model_cache is not None:
                 # Note: kernel returns projected z, but we don't use return_z_proj for now
                 # In future, we could cache the projected z from the kernel
                 model_cache["z"] = self.proj_z(z)
-            
+
             return o
-        
+
         # Original PyTorch path (fallback)
         # Caching z projection during diffusion roll-out
         if not z_is_cached:
