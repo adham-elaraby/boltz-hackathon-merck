@@ -50,15 +50,44 @@ SAMPLE_ID=$(python3 -c "import json; print(json.load(open('single_sample.jsonl')
 echo "  Using sample: ${SAMPLE_ID}"
 echo ""
 
-# Create temporary modified script in hackathon directory
-TEMP_SCRIPT="hackathon/predict_hackathon_temp_${TIMESTAMP}.py"
-echo -e "${BLUE}[2/6] Creating temporary prediction script...${NC}"
+# Create input YAML for the sample
+echo -e "${BLUE}[2/6] Creating input YAML...${NC}"
+mkdir -p benchmark_input
 
-# Copy original and remove recycling_steps check
-sed '/if args\.recycling_steps is not None:/,/model\.set_recycling_steps(args\.recycling_steps)/d' \
-    hackathon/predict_hackathon.py > "${TEMP_SCRIPT}"
+# Parse the JSONL and create YAML
+python3 << PYTHON_YAML
+import json
+import yaml
+from pathlib import Path
 
-echo "  Created: ${TEMP_SCRIPT}"
+with open('single_sample.jsonl', 'r') as f:
+    data = json.load(f)
+
+datapoint_id = data['datapoint_id']
+
+# Create sequences list for YAML
+sequences = []
+for chain_id, chain_data in sorted(data['chains'].items()):
+    seq_entry = {
+        'protein': {
+            'id': chain_id,
+            'sequence': chain_data['sequence']
+        }
+    }
+    # Add MSA path if available
+    msa_path = f"hackathon_data/datasets/${DATASET}/msa/{chain_id}.a3m"
+    if Path(msa_path).exists():
+        seq_entry['protein']['msa'] = msa_path
+    sequences.append(seq_entry)
+
+# Write YAML
+yaml_data = {'sequences': sequences}
+with open(f'benchmark_input/{datapoint_id}.yaml', 'w') as f:
+    yaml.dump(yaml_data, f)
+
+print(f"  Created: benchmark_input/{datapoint_id}.yaml")
+PYTHON_YAML
+
 echo ""
 
 # Function to run warmup
@@ -71,25 +100,21 @@ run_warmup() {
     for i in $(seq 1 ${NUM_WARMUP}); do
         echo -n "    Warmup ${i}/${NUM_WARMUP}... "
         
-        # Create temp script with appropriate flag
+        # Build command with or without --no_kernels
         if [ "${use_no_kernels}" = "true" ]; then
-            sed 's/"--output_format", "pdb"/"--output_format", "pdb", "--no_kernels"/' \
-                "${TEMP_SCRIPT}" > "${TEMP_SCRIPT}.warmup"
+            KERNEL_FLAG="--no_kernels"
         else
-            cp "${TEMP_SCRIPT}" "${TEMP_SCRIPT}.warmup"
+            KERNEL_FLAG=""
         fi
         
         # Run warmup (suppress output)
-        cd hackathon && timeout 300 python3 "../${TEMP_SCRIPT}.warmup" \
-            --input-jsonl ../single_sample.jsonl \
-            --output ../predictions_warmup \
-            --msa_directory "../hackathon_data/datasets/${DATASET}/msa" \
+        timeout 300 boltz predict "benchmark_input/${SAMPLE_ID}.yaml" \
+            --out_dir predictions_warmup \
             --sampling_steps ${SAMPLING_STEPS} \
-            --override > /dev/null 2>&1 || true
-        cd ..
+            --override \
+            ${KERNEL_FLAG} > /dev/null 2>&1 || true
         
         echo "done"
-        rm -f "${TEMP_SCRIPT}.warmup"
         rm -rf predictions_warmup
     done
 }
@@ -103,33 +128,28 @@ run_benchmark_iteration() {
     
     echo -e "${GREEN}  Running ${config_name} - Iteration ${iteration}/${NUM_ITERATIONS}...${NC}"
     
-    # Create temp script with appropriate flag
+    # Build command with or without --no_kernels
     if [ "${use_no_kernels}" = "true" ]; then
-        sed 's/"--output_format", "pdb"/"--output_format", "pdb", "--no_kernels"/' \
-            "${TEMP_SCRIPT}" > "${TEMP_SCRIPT}.run${iteration}"
+        KERNEL_FLAG="--no_kernels"
     else
-        cp "${TEMP_SCRIPT}" "${TEMP_SCRIPT}.run${iteration}"
+        KERNEL_FLAG=""
     fi
     
     # Run benchmark with timing
     mkdir -p "${output_dir}"
     START_TIME=$(date +%s.%N)
     
-    cd hackathon && python3 "../${TEMP_SCRIPT}.run${iteration}" \
-        --input-jsonl ../single_sample.jsonl \
-        --output "../${output_dir}" \
-        --msa_directory "../hackathon_data/datasets/${DATASET}/msa" \
+    boltz predict "benchmark_input/${SAMPLE_ID}.yaml" \
+        --out_dir "${output_dir}" \
         --sampling_steps ${SAMPLING_STEPS} \
-        --override 2>&1 | tee "../${output_dir}/log.txt"
-    cd ..
+        --override \
+        ${KERNEL_FLAG} 2>&1 | tee "${output_dir}/log.txt"
     
     END_TIME=$(date +%s.%N)
     ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
     
     echo "${ELAPSED}" > "${output_dir}/time.txt"
     echo "    Time: ${ELAPSED}s"
-    
-    rm -f "${TEMP_SCRIPT}.run${iteration}"
 }
 
 # Arrays to store timing results
@@ -246,7 +266,7 @@ echo ""
 
 # Cleanup
 echo -e "${BLUE}[6/6] Cleaning up...${NC}"
-rm -f "${TEMP_SCRIPT}"
+rm -rf benchmark_input
 rm -f single_sample.jsonl
 echo "  Temporary files removed"
 echo ""
