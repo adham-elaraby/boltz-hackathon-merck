@@ -11,9 +11,10 @@ echo ""
 
 # Configuration
 DATASET="abag_public"
+JSONL_FILE="hackathon_data/datasets/${DATASET}/${DATASET}.jsonl"
 
 # Check if dataset exists
-if [ ! -f "hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" ]; then
+if [ ! -f "$JSONL_FILE" ]; then
     echo "❌ Error: Dataset not found"
     exit 1
 fi
@@ -21,26 +22,35 @@ fi
 echo "✅ Found dataset: $DATASET"
 echo ""
 
+# Create single sample JSONL (first line only)
+mkdir -p benchmark_temp
+head -n 1 "$JSONL_FILE" > benchmark_temp/single_sample.jsonl
+
+echo "Testing with 1 sample (50 sampling steps for speed)"
+echo ""
+
 # Step 1: Baseline (WITHOUT kernels)
 echo "═══════════════════════════════════════════════════════════════════════════════"
 echo "PHASE 1: Testing WITHOUT NVIDIA Kernels (Baseline)"
 echo "═══════════════════════════════════════════════════════════════════════════════"
 echo ""
-echo "Running prediction with --no_kernels flag..."
 
+# Temporarily modify predict_hackathon.py to add --no_kernels
 cd hackathon
+cp predict_hackathon.py predict_hackathon_baseline.py
+sed -i 's/"boltz", "predict", str(yaml_path)/"boltz", "predict", str(yaml_path), "--no_kernels", "--sampling_steps", "50"/' predict_hackathon_baseline.py
 
 start_time=$(date +%s)
 
-python predict_hackathon.py \
-    --input-jsonl "../hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" \
+python predict_hackathon_baseline.py \
+    --input-jsonl "../benchmark_temp/single_sample.jsonl" \
     --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
     --intermediate-dir ../benchmark_baseline \
-    --submission-dir ../benchmark_baseline/submission \
-    -- --no_kernels --sampling_steps 50 --override
+    --submission-dir ../benchmark_baseline/submission
 
 if [ $? -ne 0 ]; then
     echo "❌ Baseline prediction failed!"
+    rm predict_hackathon_baseline.py
     cd ..
     exit 1
 fi
@@ -48,6 +58,7 @@ fi
 end_time=$(date +%s)
 baseline_time=$((end_time - start_time))
 
+rm predict_hackathon_baseline.py
 cd ..
 
 echo ""
@@ -59,21 +70,23 @@ echo "════════════════════════�
 echo "PHASE 2: Testing WITH NVIDIA Kernels (Optimized)"
 echo "═══════════════════════════════════════════════════════════════════════════════"
 echo ""
-echo "Running prediction WITH kernels (default)..."
 
+# Temporarily modify predict_hackathon.py to add --sampling_steps
 cd hackathon
+cp predict_hackathon.py predict_hackathon_optimized.py
+sed -i 's/"boltz", "predict", str(yaml_path)/"boltz", "predict", str(yaml_path), "--sampling_steps", "50"/' predict_hackathon_optimized.py
 
 start_time=$(date +%s)
 
-python predict_hackathon.py \
-    --input-jsonl "../hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" \
+python predict_hackathon_optimized.py \
+    --input-jsonl "../benchmark_temp/single_sample.jsonl" \
     --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
     --intermediate-dir ../benchmark_optimized \
-    --submission-dir ../benchmark_optimized/submission \
-    -- --sampling_steps 50 --override
+    --submission-dir ../benchmark_optimized/submission
 
 if [ $? -ne 0 ]; then
     echo "❌ Optimized prediction failed!"
+    rm predict_hackathon_optimized.py
     cd ..
     exit 1
 fi
@@ -81,11 +94,15 @@ fi
 end_time=$(date +%s)
 optimized_time=$((end_time - start_time))
 
+rm predict_hackathon_optimized.py
 cd ..
 
 echo ""
 echo "✅ Optimized complete: ${optimized_time}s"
 echo ""
+
+# Cleanup temp files
+rm -rf benchmark_temp
 
 # Step 3: Compare
 echo "═══════════════════════════════════════════════════════════════════════════════"
@@ -113,7 +130,7 @@ if (( $(echo "$speedup > 1.0" | bc -l) )); then
     echo "✅ SUCCESS: NVIDIA kernels provide ${percent_faster}% speedup!"
 else
     echo "⚠️  WARNING: No significant speedup observed"
-    echo "   Try with full settings: --sampling_steps 200"
+    echo "   Try with full settings: Change sampling_steps to 200 in script"
 fi
 
 # Save results
@@ -147,7 +164,8 @@ echo "   - benchmark_baseline/ (without kernels)"
 echo "   - benchmark_optimized/ (with kernels)"
 echo ""
 echo "To test with full settings (200 sampling steps):"
-echo "   Edit the script and change --sampling_steps 50 to 200"
+echo "   Edit the script and change sampling_steps from 50 to 200"
 echo ""
 echo "═══════════════════════════════════════════════════════════════════════════════"
+
 
