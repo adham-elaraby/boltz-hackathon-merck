@@ -45,49 +45,14 @@ mkdir -p "${RESULTS_DIR}"
 
 # Create single-sample dataset
 echo -e "${BLUE}[1/6] Preparing single-sample dataset...${NC}"
-head -n 1 "hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" > single_sample.jsonl
-SAMPLE_ID=$(python3 -c "import json; print(json.load(open('single_sample.jsonl'))['datapoint_id'])")
+mkdir -p benchmark_temp_rigorous
+head -n 1 "hackathon_data/datasets/${DATASET}/${DATASET}.jsonl" > benchmark_temp_rigorous/single_sample.jsonl
+SAMPLE_ID=$(python3 -c "import json; print(json.load(open('benchmark_temp_rigorous/single_sample.jsonl'))['datapoint_id'])")
 echo "  Using sample: ${SAMPLE_ID}"
 echo ""
 
-# Create input YAML for the sample
-echo -e "${BLUE}[2/6] Creating input YAML...${NC}"
-mkdir -p benchmark_input
-
-# Parse the JSONL and create YAML
-python3 << PYTHON_YAML
-import json
-import yaml
-from pathlib import Path
-
-with open('single_sample.jsonl', 'r') as f:
-    data = json.load(f)
-
-datapoint_id = data['datapoint_id']
-
-# Create sequences list for YAML
-sequences = []
-for chain_id, chain_data in sorted(data['chains'].items()):
-    seq_entry = {
-        'protein': {
-            'id': chain_id,
-            'sequence': chain_data['sequence']
-        }
-    }
-    # Add MSA path if available
-    msa_path = f"hackathon_data/datasets/${DATASET}/msa/{chain_id}.a3m"
-    if Path(msa_path).exists():
-        seq_entry['protein']['msa'] = msa_path
-    sequences.append(seq_entry)
-
-# Write YAML
-yaml_data = {'sequences': sequences}
-with open(f'benchmark_input/{datapoint_id}.yaml', 'w') as f:
-    yaml.dump(yaml_data, f)
-
-print(f"  Created: benchmark_input/{datapoint_id}.yaml")
-PYTHON_YAML
-
+# No need to create YAML - predict_hackathon.py handles that
+echo -e "${BLUE}[2/6] Setup complete${NC}"
 echo ""
 
 # Function to run warmup
@@ -100,22 +65,32 @@ run_warmup() {
     for i in $(seq 1 ${NUM_WARMUP}); do
         echo -n "    Warmup ${i}/${NUM_WARMUP}... "
         
-        # Build command with or without --no_kernels
+        # Create temporary modified script
+        cd hackathon
+        cp predict_hackathon.py predict_hackathon_warmup.py
+        
+        # Inject flags into the boltz command
         if [ "${use_no_kernels}" = "true" ]; then
-            KERNEL_FLAG="--no_kernels"
+            sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--no_kernels", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
         else
-            KERNEL_FLAG=""
+            sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_warmup.py
         fi
         
+        # Remove recycling_steps check
+        sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_warmup.py
+        
         # Run warmup (suppress output)
-        timeout 300 boltz predict "benchmark_input/${SAMPLE_ID}.yaml" \
-            --out_dir predictions_warmup \
-            --sampling_steps ${SAMPLING_STEPS} \
-            --override \
-            ${KERNEL_FLAG} > /dev/null 2>&1 || true
+        timeout 300 python predict_hackathon_warmup.py \
+            --input-jsonl "../benchmark_temp_rigorous/single_sample.jsonl" \
+            --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
+            --intermediate-dir ../warmup_temp \
+            --submission-dir ../warmup_temp/submission > /dev/null 2>&1 || true
+        
+        rm predict_hackathon_warmup.py
+        cd ..
+        rm -rf warmup_temp
         
         echo "done"
-        rm -rf predictions_warmup
     done
 }
 
@@ -128,28 +103,38 @@ run_benchmark_iteration() {
     
     echo -e "${GREEN}  Running ${config_name} - Iteration ${iteration}/${NUM_ITERATIONS}...${NC}"
     
-    # Build command with or without --no_kernels
+    # Create temporary modified script
+    cd hackathon
+    cp predict_hackathon.py predict_hackathon_iter${iteration}.py
+    
+    # Inject flags into the boltz command
     if [ "${use_no_kernels}" = "true" ]; then
-        KERNEL_FLAG="--no_kernels"
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--no_kernels", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
     else
-        KERNEL_FLAG=""
+        sed -i 's/"--output_format", "pdb",/"--output_format", "pdb", "--sampling_steps", "'${SAMPLING_STEPS}'", "--override",/' predict_hackathon_iter${iteration}.py
     fi
     
+    # Remove recycling_steps check
+    sed -i '/if args.recycling_steps/,/fixed.extend/d' predict_hackathon_iter${iteration}.py
+    
     # Run benchmark with timing
-    mkdir -p "${output_dir}"
+    mkdir -p "../${output_dir}"
     START_TIME=$(date +%s.%N)
     
-    boltz predict "benchmark_input/${SAMPLE_ID}.yaml" \
-        --out_dir "${output_dir}" \
-        --sampling_steps ${SAMPLING_STEPS} \
-        --override \
-        ${KERNEL_FLAG} 2>&1 | tee "${output_dir}/log.txt"
+    python predict_hackathon_iter${iteration}.py \
+        --input-jsonl "../benchmark_temp_rigorous/single_sample.jsonl" \
+        --msa-dir "../hackathon_data/datasets/${DATASET}/msa" \
+        --intermediate-dir "../${output_dir}" \
+        --submission-dir "../${output_dir}/submission" 2>&1 | tee "../${output_dir}/log.txt"
     
     END_TIME=$(date +%s.%N)
     ELAPSED=$(echo "$END_TIME - $START_TIME" | bc)
     
-    echo "${ELAPSED}" > "${output_dir}/time.txt"
+    echo "${ELAPSED}" > "../${output_dir}/time.txt"
     echo "    Time: ${ELAPSED}s"
+    
+    rm predict_hackathon_iter${iteration}.py
+    cd ..
 }
 
 # Arrays to store timing results
@@ -266,8 +251,7 @@ echo ""
 
 # Cleanup
 echo -e "${BLUE}[6/6] Cleaning up...${NC}"
-rm -rf benchmark_input
-rm -f single_sample.jsonl
+rm -rf benchmark_temp_rigorous
 echo "  Temporary files removed"
 echo ""
 
